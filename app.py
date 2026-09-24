@@ -8,6 +8,7 @@ em ~/pesquisa. Este app só apresenta — nenhum número é calculado aqui.
 import json
 import os
 from collections import Counter
+from html import escape as esc
 
 import altair as alt
 import pandas as pd
@@ -20,7 +21,9 @@ MAT = json.load(open(f'{AQUI}/data/materias.json', encoding='utf-8'))
 MAT_CAND = MAT['candidatos']
 MAT_VOT = MAT['votacoes']
 TODOS = json.load(open(f'{AQUI}/data/candidatos-todos.json', encoding='utf-8'))
-DIR_FOTOS = f'{AQUI}/data/fotos'
+# as fotos ficam em ./static/ e sao servidas pelo Streamlit em /app/static/...
+# (server.enableStaticServing = true no .streamlit/config.toml)
+URL_FOTOS = 'app/static/fotos'
 
 st.set_page_config(page_title='Eleições ES 2026', page_icon='🗳️', layout='wide')
 
@@ -29,6 +32,13 @@ if 'filtros' not in st.session_state:
     st.session_state.filtros = {}
 
 df = pd.DataFrame(DADOS)
+# Colunas que guardam lista/dict (emendas_destinos, emendas_planos) viram coluna 'object'
+# com NaN misturado, e o pyarrow nao converte: "Expected bytes, got a 'float' object".
+# O Streamlit se recupera sozinho, mas loga erro a cada rerun — entao normalizo aqui.
+for _col in ('emendas_destinos', 'emendas_planos'):
+    if _col in df.columns:
+        df[_col] = df[_col].apply(
+            lambda v: json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else '')
 df['subst_pct'] = (df['subst'] / df['pl'] * 100).where(df['pl'] > 0)
 df['conversao_pct'] = (df['leis'] / df['pl'] * 100).where(df['pl'] > 0)
 df['rotulo'] = df['nome'].str.title()
@@ -75,23 +85,41 @@ if so_com_voto:
     f = f[f['gov'].notna()]
 
 # ─── cabecalho ───
-st.title('Eleições ES 2026 — quem são os candidatos que já ocupam cargo')
+st.title('Eleições ES 2026')
+st.caption('Quem já ocupa cargo e está na disputa — deputados estaduais (ALES), '
+           'deputados federais (Câmara) e quem concorre a outro cargo.')
 st.caption(f'{len(f)} de {len(df)} candidatos segundo os filtros · '
-           f'{int(f["casa"].eq("Estadual").sum())} estaduais (ALES) e '
-           f'{int(f["casa"].eq("Federal").sum())} federais (Câmara) · eleição em 04/10/2026')
+           f'{int(f["casa"].eq("Estadual").sum())} estaduais e '
+           f'{int(f["casa"].eq("Federal").sum())} federais · eleição em 04/10/2026')
 
-a, b, c, d = st.columns(4)
-a.metric('Candidatos', len(f))
-b.metric('Com dado de voto', int(f['gov'].notna().sum()))
 med = f['gov'].mean()
-c.metric('Alinhamento médio', f'{med:.1f}%' if pd.notna(med) else '—')
-d.metric('Produção total', f'{int(f["pl"].fillna(0).sum()):,}'.replace(',', '.'))
+producao = f'{int(f["pl"].fillna(0).sum()):,}'.replace(',', '.')   # 3.486, so' no valor
+# KPIs em HTML+CSS, nao st.metric: no celular o st.columns empilha e 4 metricas
+# gastam meia tela antes de qualquer conteudo. Aqui vira 2x2 no celular e 1x4 no desktop.
+st.markdown(f"""
+<style>
+.kpis {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 6px 0 2px; }}
+@media (min-width: 700px) {{ .kpis {{ grid-template-columns: repeat(4, 1fr); gap: 16px; }} }}
+.kpi {{ background: #f7f8fa; border: 1px solid #e6e8ec; border-radius: 8px; padding: 9px 11px; }}
+.kpi .lbl {{ font-size: 0.72rem; color: #6b7280; line-height: 1.25; }}
+.kpi .val {{ font-size: 1.5rem; font-weight: 650; line-height: 1.25; }}
+@media (max-width: 699px) {{ .kpi .val {{ font-size: 1.25rem; }} }}
+</style>
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Candidatos</div><div class="val">{len(f)}</div></div>
+  <div class="kpi"><div class="lbl">Com dado de voto</div>
+       <div class="val">{int(f['gov'].notna().sum())}</div></div>
+  <div class="kpi"><div class="lbl">Alinhamento médio</div>
+       <div class="val">{f'{med:.1f}%' if pd.notna(med) else '—'}</div></div>
+  <div class="kpi"><div class="lbl">Produção total</div>
+       <div class="val">{producao}</div></div>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
 aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(
-    ['📍 Onde se posicionam', '🔎 Ficha', '📜 Matérias e votos', '🖼️ Todos os candidatos',
-     '💰 Emendas', '⚠️ Método'])
+    ['📍 Posição', '🔎 Ficha', '📜 Matérias', '🖼️ Candidatos', '💰 Emendas', '⚠️ Método'])
 
 # ═══════════════════ 1. POSICIONAMENTO ═══════════════════
 with aba1:
@@ -235,7 +263,9 @@ with aba2:
             st.write(f'**{int(r["emendas_n"])} emendas** de transferência especial ("emenda pix"), '
                      f'**R$ {r["emendas_valor"]:,.2f}**'.replace(',', '.') +
                      ' em planos de ação.')
-            dest = pd.DataFrame(r['emendas_destinos'], columns=['Destino', 'Valor (R$)'])
+            # emendas_destinos virou string JSON na normalizacao do df (ver topo do arquivo)
+            dest = pd.DataFrame(json.loads(r['emendas_destinos'] or '[]'),
+                                columns=['Destino', 'Valor (R$)'])
             dest['Destino'] = dest['Destino'].str.title()
             st.dataframe(dest, width='stretch', hide_index=True,
                          column_config={'Valor (R$)': st.column_config.NumberColumn(format='R$ %.2f')})
@@ -268,20 +298,30 @@ with aba3:
         total = fun['protocoladas'] or 1
 
         # ── indicadores macro ──
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric('Propostas', fun['protocoladas'],
-                  help='PL + PLC de autoria própria, legislatura 20')
-        m2.metric('Viraram lei', fun['virou_lei'],
-                  delta=f'{fun["virou_lei"]/total*100:.1f}% do total', delta_color='off')
-        m3.metric('Substantivas', f'{subst/total*100:.0f}%',
-                  delta=f'{subst} propostas', delta_color='off',
-                  help='Propõe política pública, em vez de homenagem')
-        m4.metric('Simbólicas', f'{simb/total*100:.0f}%',
-                  delta=f'{simb} propostas', delta_color='inverse',
-                  help='Nomeação de próprio, utilidade pública, homenagem')
-        m5.metric('Com votação nominal', fun['com_votacao'],
-                  delta=f'{fun["com_votacao"]/total*100:.1f}% do total', delta_color='off',
-                  help='A maioria das proposições nunca vai a voto nominal')
+        # KPIs em HTML: 5 metricas em st.columns viram 5 linhas empilhadas no celular.
+        # Aqui: 2 por linha no celular, 5 no desktop.
+        st.markdown(f"""
+<style>
+.kpis-mat {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; margin: 4px 0 2px; }}
+@media (min-width: 760px) {{ .kpis-mat {{ grid-template-columns: repeat(5, 1fr); gap: 14px; }} }}
+.kpis-mat .kpi {{ background: #f7f8fa; border: 1px solid #e6e8ec; border-radius: 8px; padding: 9px 11px; }}
+.kpis-mat .lbl {{ font-size: 0.7rem; color: #6b7280; line-height: 1.25; min-height: 2.1em; }}
+.kpis-mat .val {{ font-size: 1.35rem; font-weight: 650; line-height: 1.2; }}
+.kpis-mat .sub {{ font-size: 0.68rem; color: #6b7280; }}
+</style>
+<div class="kpis-mat">
+  <div class="kpi"><div class="lbl">Propostas</div><div class="val">{fun['protocoladas']}</div>
+       <div class="sub">PL + PLC</div></div>
+  <div class="kpi"><div class="lbl">Viraram lei</div><div class="val">{fun['virou_lei']}</div>
+       <div class="sub">{fun['virou_lei']/total*100:.1f}% do total</div></div>
+  <div class="kpi"><div class="lbl">Substantivas</div><div class="val">{subst/total*100:.0f}%</div>
+       <div class="sub">{subst} propostas</div></div>
+  <div class="kpi"><div class="lbl">Simbólicas</div><div class="val">{simb/total*100:.0f}%</div>
+       <div class="sub">{simb} propostas</div></div>
+  <div class="kpi"><div class="lbl">Com votação nominal</div><div class="val">{fun['com_votacao']}</div>
+       <div class="sub">{fun['com_votacao']/total*100:.1f}% do total</div></div>
+</div>
+""", unsafe_allow_html=True)
 
         # ── funil ──
         st.markdown('#### O funil da proposta')
@@ -437,12 +477,13 @@ with aba4:
         PART_TODOS = sorted({c['partido'] for c in TODOS if c['partido']})
         CARGO_TODOS = ['Dep. Estadual', 'Dep. Federal', 'Senador']
 
-        g1, g2, g3, g4 = st.columns([2, 2, 2, 1])
+        g1, g2 = st.columns(2)
         f_part = g1.multiselect('Partido', PART_TODOS, default=[], key='todos_part')
-        f_cargo = g2.multiselect('Cargo', CARGO_TODOS, default=CARGO_TODOS, key='todos_cargo')
-        f_busca = g3.text_input('Buscar por nome', key='todos_busca',
-                                placeholder='parte do nome de urna ou civil')
-        f_pag = g4.selectbox('Por página', [60, 120, 240, 558], index=1, key='todos_pag')
+        f_busca = g2.text_input('Buscar por nome', key='todos_busca',
+                                placeholder='parte do nome')
+        g3, g4 = st.columns(2)
+        f_cargo = g3.multiselect('Cargo', CARGO_TODOS, default=CARGO_TODOS, key='todos_cargo')
+        f_pag = g4.selectbox('Por página', [60, 120, 240, 558], index=0, key='todos_pag')
 
         sel = [c for c in TODOS
                if c['cargo'] in f_cargo
@@ -460,20 +501,69 @@ with aba4:
             st.info('Nenhum candidato com esses filtros.')
         else:
             pagina = sel[:f_pag]
-            COLS = 6
-            for i in range(0, len(pagina), COLS):
-                cols = st.columns(COLS)
-                for j, c in enumerate(pagina[i:i + COLS]):
-                    with cols[j]:
-                        if c['foto'] and os.path.exists(f'{DIR_FOTOS}/{c["foto"]}'):
-                            st.image(f'{DIR_FOTOS}/{c["foto"]}', width='stretch')
-                        else:
-                            st.markdown('*(sem foto)*')
-                        marca = ' · 📋' if c['tem_ficha'] else ''
-                        st.markdown(f"**{c['nome_urna']}**{marca}")
-                        st.caption(f"{c['partido']} · nº {c['numero']} · {c['cargo']}")
-                        if c['nome'].upper() != c['nome_urna'].upper():
-                            st.caption(f'_{c["nome"].title()}_')
+
+            # Grade em HTML+CSS, nao st.columns: o st.columns NAO reflui, e no celular
+            # cada coluna vira uma linha inteira (foto gigante, uma por linha).
+            # 'auto-fill' + 'minmax' deixa o navegador decidir quantas colunas cabem:
+            # ~3 no celular, ~7 no tablet, ~11 no desktop.
+            st.markdown("""
+<style>
+.grade-cand {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 12px 10px;
+  margin-top: 4px;
+}
+@media (min-width: 640px)  { .grade-cand { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); } }
+@media (min-width: 1200px) { .grade-cand { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); } }
+.card-cand { display: flex; flex-direction: column; }
+.card-cand img {
+  width: 100%;
+  aspect-ratio: 161 / 225;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f0f2f6;
+  display: block;
+}
+.card-cand .nome {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 5px;
+  /* nome de urna pode ser longo: corta em 2 linhas em vez de estourar a celula */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-cand .meta {
+  font-size: 0.68rem;
+  color: #6b7280;
+  line-height: 1.25;
+  margin-top: 2px;
+}
+@media (max-width: 639px) {
+  /* no celular economiza espaco vertical: so' a linha essencial */
+  .card-cand .cargo { display: none; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+            cards = []
+            for c in pagina:
+                foto = (f'<img src="{URL_FOTOS}/{esc(c["foto"])}" alt="{esc(c["nome_urna"])}" '
+                        f'loading="lazy" decoding="async">') if c['foto'] else \
+                       '<div style="aspect-ratio:161/225;background:#f0f2f6;border-radius:6px"></div>'
+                marca = ' 📋' if c['tem_ficha'] else ''
+                cards.append(
+                    f'<div class="card-cand">'
+                    f'{foto}'
+                    f'<div class="nome">{esc(c["nome_urna"])}{marca}</div>'
+                    f'<div class="meta">{esc(c["partido"])} · nº {esc(str(c["numero"]))}'
+                    f'<span class="cargo"> · {esc(c["cargo"])}</span></div>'
+                    f'</div>')
+            st.markdown(f'<div class="grade-cand">{"".join(cards)}</div>',
+                        unsafe_allow_html=True)
 
             if len(sel) > f_pag:
                 st.caption(f'... e mais {len(sel) - f_pag}. Aumente "Por página" para ver todos.')
@@ -526,7 +616,8 @@ with aba5:
         st.subheader('Para onde vai')
         todos = []
         for _, r in fed.iterrows():
-            for d, v in (r['emendas_destinos'] or []):
+            # emendas_destinos virou string JSON na normalizacao do df (ver topo do arquivo)
+            for d, v in json.loads(r['emendas_destinos'] or '[]'):
                 todos.append({'Destino': str(d).title(), 'Deputado': r['rotulo'], 'Valor (R$)': v})
         if todos:
             dt = pd.DataFrame(todos)

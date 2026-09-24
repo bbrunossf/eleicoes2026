@@ -1,0 +1,23 @@
+[server]
+headless = true
+port = 8501
+# 0.0.0.0 permite acessar da rede local (celular/desktop). Para fechar, troque por
+# "127.0.0.1". NAO exponha esta porta na internet: o Streamlit aceita WebSocket de
+# qualquer origem quando enableCORS=false.
+address = "0.0.0.0"
+
+# Serve arquivos de ./static/ em /app/static/... — usado para as 558 fotos da galeria.
+# Sem isto a grade responsiva (HTML+CSS grid) nao consegue montar as <img>.
+enableStaticServing = true
+
+# CORS LIGADO (padrao seguro). Desligar faz o Streamlit aceitar conexao cross-origin
+# de qualquer site aberto no seu navegador.
+enableCORS = true
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#4C78A8"
