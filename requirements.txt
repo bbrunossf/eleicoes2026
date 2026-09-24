@@ -1,0 +1,7 @@
+# Eleições ES 2026 — painel Streamlit
+# Testado em Python 3.11 (Raspberry Pi OS, aarch64).
+# Se alguma versão não existir para o seu Python, afrouxe o pin (ex.: streamlit>=1.64).
+
+streamlit==1.64.0
+pandas==3.0.6
+altair==6.3.0

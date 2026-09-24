@@ -1,0 +1,15 @@
+{
+ "estadual": [
+  "Alinhamento medido por **voto em veto** — a ALES não publica orientação de bancada, então `Sim` em veto = manter o veto do governador. É proxy, não voto declarado.",
+  "**189 dos 458 boletins de votação nominal ficaram fora** (36% dos vetos), por PDFs com fonte sem mapa Unicode. A cobertura é de 269 votações.",
+  "**Conversão em lei mede posição na coalizão, não qualidade.** Governo converte ~42%, oposição ~20% — quem propõe matéria substantiva fora do governo quase não aprova.",
+  "FEFC e patrimônio vêm de **prestação de contas parcial** do TSE (22/09/2026)."
+ ],
+ "federal": [
+  "Alinhamento usa a **orientação oficial do Governo** (1.133 votações) — não a maioria de bancada, que mede coesão partidária e erra em até 66 pontos.",
+  "**Conversão em lei não discrimina posição no federal**: governo 1,1% e oposição 1,4%. Não usar como critério.",
+  "Emendas cobrem **só transferências especiais** (\"emenda pix\"). Não inclui RP6, RP7 nem RP8 — o total de cada deputado é maior.",
+  "Produção classificada por **regex sobre a ementa** — lê o objetivo declarado, não o conteúdo nem a constitucionalidade.",
+  "2026 é parcial em produção, votação e candidatura."
+ ]
+}
