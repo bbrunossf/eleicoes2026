@@ -65,15 +65,18 @@ proposital: ficha sem ressalva vira ficha enganosa.
 ## Estrutura
 
 ```
-app.py                  painel Streamlit, 5 abas (só apresenta — não calcula nada)
-preparar_dados.py       gera data/candidatos.json e data/ressalvas.json
-preparar_materias.py    gera data/materias.json (propostas, temas, funil, votações)
-gera_fichas.py          gera as fichas .md por candidato
-data/candidatos.json    43 candidatos, as 4 dimensões (286 KB)
-data/materias.json      33 candidatos estaduais: propostas, temas, funil, 239 votações (1,2 MB)
-data/ressalvas.json     texto das ressalvas, exibido na UI
-.streamlit/config.toml  porta, CORS e tema
-fichas/                 uma ficha .md por candidato, em texto (43 arquivos)
+app.py                        painel Streamlit, 6 abas (só apresenta — não calcula nada)
+preparar_dados.py             gera data/candidatos.json e data/ressalvas.json
+preparar_materias.py          gera data/materias.json (propostas, temas, funil, votações)
+preparar_candidatos_todos.py  gera data/candidatos-todos.json + confere as fotos
+gera_fichas.py                gera as fichas .md por candidato
+data/candidatos.json          43 candidatos com cargo, as 4 dimensões (286 KB)
+data/materias.json            33 estaduais: propostas, temas, funil, 239 votações (1,2 MB)
+data/candidatos-todos.json    558 candidatos (222 KB)
+data/fotos/                   558 fotos do TSE, 161×225 (3,0 MB)
+data/ressalvas.json           texto das ressalvas, exibido na UI
+.streamlit/config.toml        porta, CORS e tema
+fichas/                       uma ficha .md por candidato, em texto (43 arquivos)
 ```
 
 ### Abas
@@ -81,8 +84,61 @@ fichas/                 uma ficha .md por candidato, em texto (43 arquivos)
 1. **Onde se posicionam** — dispersão eixo governo × produção substantiva, com a tabela completa
 2. **Ficha** — as quatro dimensões de um candidato
 3. **Matérias e votos** — o que ele propôs, por tema, o funil até virar lei, e como a casa votou
-4. **Emendas** — transferências especiais da bancada federal, com destinos
-5. **Método** — as métricas que foram testadas e reprovadas, e as ressalvas de cada casa
+4. **Todos os candidatos** — galeria de fotos dos 558 candidatos, filtrável por partido
+5. **Emendas** — transferências especiais da bancada federal, com destinos
+6. **Método** — as métricas que foram testadas e reprovadas, e as ressalvas de cada casa
+
+## A aba Todos os candidatos
+
+Galeria com os **558 candidatos** do ES: 410 a deputado estadual, 137 a federal e 11 a senador.
+Foto, nome de urna, partido, número e cargo, em grade de 6 colunas, filtrável por partido,
+cargo e busca por nome. Quem tem ficha analisada nas outras abas leva um marcador 📋.
+
+### O TSE não publica foto em CSV — e bloqueia hotlink
+
+Esta aba custou investigação. O que foi estabelecido, com evidência:
+
+**1. O CSV de candidaturas não tem foto.** São 50 colunas e nenhuma de imagem. O
+`consulta_cand_complementar` tem 49 e também não tem.
+
+**2. Não existe pacote compactado de fotos.** Testei ~20 nomes plausíveis em `cdn.tse.jus.br`
+para 2026 **e** para 2022, sempre com o controle `consulta_cand_*.zip` dando 206 — ou seja, o
+teste era válido e o resultado é 404 de verdade.
+
+**3. O `fotoUrl` vem do endpoint do DivulgaCandContas**, cujo caminho **não está documentado**.
+Foi descoberto baixando os chunks JS do próprio app do TSE e encontrando a chamada:
+
+```js
+getCandidatoByID(o) { return this.http.get(
+  `${this.apiURL}/buscar/${o.ano}/${o.sgUe}/${o.eleicao}/candidato/${o.idCandidato}`) }
+```
+
+```
+https://divulgacandcontas.tse.jus.br/divulga/rest/v1/candidatura/buscar/2026/ES/20322002026/candidato/{SQ_CANDIDATO}
+```
+
+Resposta: 200/200 nas 558, todas com `fotoUrl` e `fotoUrlPublicavel: true`.
+
+**4. O TSE permite download mas bloqueia hotlink.** A imagem fica em
+`.../rest/arquivo/img/{eleicao}/{sq}/{UF}` e o WAF (Akamai) devolve **403 para requisição de
+navegador** — testei em quatro contextos, inclusive carregando do próprio domínio do TSE.
+O que destrava o download via `curl` é o header **`Accept-Language: pt-BR`**; com o
+`Accept: image/avif,...` que o navegador manda, dá 403.
+
+**Por isso as 558 fotos estão no pacote** (`data/fotos/`, 3,0 MB, 161×225, ~5,7 KB cada) e são
+servidas pelo endpoint local do Streamlit. O `foto_url` original de cada uma continua no JSON,
+para auditoria e para o caso de o TSE liberar hotlink depois.
+
+**Armadilha de teste que custou tempo:** `curl -I` (HEAD) é bloqueado com 403 pelo CDN, enquanto
+o GET funciona. Concluí por um momento que o arquivo não existia com base em HEAD. Use GET com
+`Range: bytes=0-400` para testar existência nesse CDN.
+
+### Ressalva
+
+A filtragem é verificada no nível da lógica (contagens, combinações, busca por nome de urna e
+civil, todas as fotos presentes). **O widget em si não foi exercitado por automação** — o
+`st.multiselect` e o `st.text_input` do Streamlit 1.64 não aceitam valor programático via CDP.
+São widgets padrão; a limitação é do teste, não da aba.
 
 ## A aba Matérias e votos
 

@@ -563,7 +563,7 @@
  },
  {
   "nome": "Amaro Neto",
-  "partido": "PROGRESSISTAS",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 80.7738814993954,
@@ -965,7 +965,7 @@
  },
  {
   "nome": "Da Vitoria",
-  "partido": "PROGRESSISTAS",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 76.90355329949239,
@@ -1477,7 +1477,7 @@
  },
  {
   "nome": "Dr. Victor Linhalis",
-  "partido": "PSB",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 85.07670850767084,
@@ -1879,7 +1879,7 @@
  },
  {
   "nome": "Evair Vieira de Melo",
-  "partido": "REPUBLICANOS",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Senador",
   "gov": 19.891745602165088,
@@ -2875,7 +2875,7 @@
  },
  {
   "nome": "Gilson Daniel",
-  "partido": "PODEMOS",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 88.14898419864559,
@@ -3860,7 +3860,7 @@
  },
  {
   "nome": "Gilvan da Federal",
-  "partido": "PARTIDO LIBERAL",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 25.120772946859905,
@@ -4306,7 +4306,7 @@
  },
  {
   "nome": "Helder Salomão",
-  "partido": "PARTIDO DOS TRABALHADORES",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Governador",
   "gov": 97.78012684989429,
@@ -5962,7 +5962,7 @@
  },
  {
   "nome": "Jack Rocha",
-  "partido": "PARTIDO DOS TRABALHADORES",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 98.68421052631578,
@@ -6331,7 +6331,7 @@
  },
  {
   "nome": "Messias Donato",
-  "partido": "UNIÃO BRASIL",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Federal",
   "gov": 28.36004932182491,
@@ -6656,7 +6656,7 @@
  },
  {
   "nome": "Paulo Folletto",
-  "partido": "PARTIDO SOCIALISTA BRASILEIRO",
+  "partido": null,
   "casa": "Federal",
   "cargo26": "Dep. Estadual",
   "gov": 92.3076923076923,

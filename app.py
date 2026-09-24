@@ -7,6 +7,7 @@ em ~/pesquisa. Este app só apresenta — nenhum número é calculado aqui.
 """
 import json
 import os
+from collections import Counter
 
 import altair as alt
 import pandas as pd
@@ -18,6 +19,8 @@ RESSALVAS = json.load(open(f'{AQUI}/data/ressalvas.json', encoding='utf-8'))
 MAT = json.load(open(f'{AQUI}/data/materias.json', encoding='utf-8'))
 MAT_CAND = MAT['candidatos']
 MAT_VOT = MAT['votacoes']
+TODOS = json.load(open(f'{AQUI}/data/candidatos-todos.json', encoding='utf-8'))
+DIR_FOTOS = f'{AQUI}/data/fotos'
 
 st.set_page_config(page_title='Eleições ES 2026', page_icon='🗳️', layout='wide')
 
@@ -86,8 +89,9 @@ d.metric('Produção total', f'{int(f["pl"].fillna(0).sum()):,}'.replace(',', '.
 
 st.divider()
 
-aba1, aba2, aba3, aba4, aba5 = st.tabs(
-    ['📍 Onde se posicionam', '🔎 Ficha', '📜 Matérias e votos', '💰 Emendas', '⚠️ Método'])
+aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(
+    ['📍 Onde se posicionam', '🔎 Ficha', '📜 Matérias e votos', '🖼️ Todos os candidatos',
+     '💰 Emendas', '⚠️ Método'])
 
 # ═══════════════════ 1. POSICIONAMENTO ═══════════════════
 with aba1:
@@ -420,8 +424,81 @@ with aba3:
                    '105 dos 458 boletins não são legíveis por `pdftotext` (fonte sem mapa '
                    'Unicode), então a cobertura de votação é parcial.')
 
-# ═══════════════════ 4. EMENDAS ═══════════════════
+# ═══════════════════ 4. TODOS OS CANDIDATOS ═══════════════════
 with aba4:
+    st.subheader('Todos os candidatos — dep. estadual, dep. federal e senador pelo ES')
+    st.caption('Os 558 candidatos registrados no TSE para os três cargos, em ordem alfabética '
+               'dentro de cada cargo. Foto, nome de urna, partido e número. '
+               'Fonte: TSE (DivulgaCandContas).')
+
+    if not TODOS:
+        st.info('Sem dados de candidatos.')
+    else:
+        PART_TODOS = sorted({c['partido'] for c in TODOS if c['partido']})
+        CARGO_TODOS = ['Dep. Estadual', 'Dep. Federal', 'Senador']
+
+        g1, g2, g3, g4 = st.columns([2, 2, 2, 1])
+        f_part = g1.multiselect('Partido', PART_TODOS, default=[], key='todos_part')
+        f_cargo = g2.multiselect('Cargo', CARGO_TODOS, default=CARGO_TODOS, key='todos_cargo')
+        f_busca = g3.text_input('Buscar por nome', key='todos_busca',
+                                placeholder='parte do nome de urna ou civil')
+        f_pag = g4.selectbox('Por página', [60, 120, 240, 558], index=1, key='todos_pag')
+
+        sel = [c for c in TODOS
+               if c['cargo'] in f_cargo
+               and (not f_part or c['partido'] in f_part)
+               and (not f_busca.strip()
+                    or f_busca.strip().lower() in c['nome_urna'].lower()
+                    or f_busca.strip().lower() in c['nome'].lower())]
+
+        # partidos do resultado, para mostrar a distribuição de relance
+        dist = Counter(c['partido'] for c in sel)
+        st.caption(f'**{len(sel)}** candidatos · **{len(dist)}** partidos · '
+                   f'mostrando os primeiros {min(f_pag, len(sel))}')
+
+        if not sel:
+            st.info('Nenhum candidato com esses filtros.')
+        else:
+            pagina = sel[:f_pag]
+            COLS = 6
+            for i in range(0, len(pagina), COLS):
+                cols = st.columns(COLS)
+                for j, c in enumerate(pagina[i:i + COLS]):
+                    with cols[j]:
+                        if c['foto'] and os.path.exists(f'{DIR_FOTOS}/{c["foto"]}'):
+                            st.image(f'{DIR_FOTOS}/{c["foto"]}', width='stretch')
+                        else:
+                            st.markdown('*(sem foto)*')
+                        marca = ' · 📋' if c['tem_ficha'] else ''
+                        st.markdown(f"**{c['nome_urna']}**{marca}")
+                        st.caption(f"{c['partido']} · nº {c['numero']} · {c['cargo']}")
+                        if c['nome'].upper() != c['nome_urna'].upper():
+                            st.caption(f'_{c["nome"].title()}_')
+
+            if len(sel) > f_pag:
+                st.caption(f'... e mais {len(sel) - f_pag}. Aumente "Por página" para ver todos.')
+
+        st.divider()
+        st.caption('📋 = tem ficha analisada nas outras abas (é quem já ocupa cargo).')
+        with st.expander('De onde vêm as fotos, e por que não são link direto'):
+            st.markdown(
+                'O CSV de candidaturas do TSE **não tem campo de foto** — são 50 colunas e nenhuma '
+                'de imagem. O `fotoUrl` vem do endpoint do DivulgaCandContas:\n\n'
+                '```\n/divulga/rest/v1/candidatura/buscar/{ano}/{UF}/{eleicao}/candidato/{sq}\n```\n\n'
+                'O caminho foi descoberto lendo os chunks JS do próprio app do TSE, porque a '
+                'documentação não publica esse endpoint.\n\n'
+                '**Por que as fotos estão no pacote em vez de linkadas:** o TSE serve as imagens '
+                'com proteção de WAF (Akamai) que devolve **403 para requisição de navegador** — '
+                'testei em quatro contextos, inclusive carregando do próprio domínio do TSE. '
+                'O download funciona (exige header `Accept-Language: pt-BR`), o hotlink não. '
+                'Então as 558 fotos foram baixadas (161×225, ~5,7 KB cada, 3 MB no total) e são '
+                'servidas localmente.\n\n'
+                'A URL original de cada uma continua guardada em `foto_url` no JSON, para '
+                'auditoria e para o caso de o TSE liberar o hotlink depois.'
+            )
+
+# ═══════════════════ 5. EMENDAS ═══════════════════
+with aba5:
     st.subheader('Emendas de transferência especial — bancada federal do ES')
     fed = df[(df['casa'] == 'Federal') & df['emendas_valor'].notna()].copy()
     if fed.empty:
@@ -440,20 +517,10 @@ with aba4:
         por['media'] = por['emendas_valor'] / por['emendas_n']
         por = por.sort_values('emendas_valor', ascending=False)
         por.columns = ['Deputado', 'Partido', 'Emendas', 'Total (R$)', 'Alinh. governo %', 'Média (R$)']
-        
-        por['Total (R$)'] = por['Total (R$)'].map(
-            lambda x: f'R$ {x:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        )
-
-        por['Média (R$)'] = por['Média (R$)'].map(
-            lambda x: f'R$ {x:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
-        )
-        
         st.dataframe(por, width='stretch', hide_index=True,
                      column_config={
-                         #'Total (R$)': st.column_config.NumberColumn(format='R$ %.2f'),
-                         'Total (R$)': st.column_config.TextColumn(alignment="right"),
-                         #'Média (R$)': st.column_config.NumberColumn(format='R$ %.2f'),
+                         'Total (R$)': st.column_config.NumberColumn(format='R$ %.2f'),
+                         'Média (R$)': st.column_config.NumberColumn(format='R$ %.2f'),
                          'Alinh. governo %': st.column_config.NumberColumn(format='%.1f%%')})
 
         st.subheader('Para onde vai')
@@ -474,8 +541,8 @@ with aba4:
             st.caption('15 maiores destinos somados. Municípios aparecem como recebedores '
                        'individuais; o Estado do ES aparece agregado.')
 
-# ═══════════════════ 5. MÉTODO ═══════════════════
-with aba5:
+# ═══════════════════ 6. MÉTODO ═══════════════════
+with aba6:
     st.subheader('Por que estas quatro dimensões — e por que as óbvias ficaram de fora')
     st.markdown(
         'A pesquisa mediu muito mais que isto. Estas quatro sobreviveram porque **discriminam** '
